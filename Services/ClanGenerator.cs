@@ -22,7 +22,7 @@ public sealed class ClanGenerator : IClanGenerator
         };
 
         var requiredTypes = new[] { RaceType.Warrior, RaceType.Elf, RaceType.Dwarf };
-        var totalSquads = Math.Max(config.SquadCount, requiredTypes.Length);
+        var totalSquads = config.SquadCount;
 
         for (var squadIndex = 0; squadIndex < totalSquads; squadIndex++)
         {
