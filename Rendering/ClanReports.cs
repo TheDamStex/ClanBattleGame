@@ -52,9 +52,10 @@ public sealed class ClanTextReport : ClanReport
                 Device.WriteLine($"    Зброя: {view.Weapon}, Пересування: {view.Movement}");
                 Device.WriteLine($"    Стати: Атк {view.Stats.Attack}, Зах {view.Stats.Defense}, Шв {view.Stats.Speed}, HP {view.Stats.Health}");
                 Device.WriteLine($"    Позиція: ({view.Position.X},{view.Position.Y})");
+                Device.WriteLine($"    Виконано дій: {player.ActionsPerformed}");
                 if (view.Features.Count > 0)
                 {
-                    var featureText = string.Join(", ", view.Features.Select(item => $"{item.Key}: {item.Value}"));
+                    var featureText = string.Join(", ", view.Features.Select(item => $"{item.Key}={item.Value}"));
                     Device.WriteLine($"    Ознаки: {featureText}");
                 }
                 else
@@ -111,7 +112,7 @@ public sealed class ClanAsciiReport : ClanReport
         {
             var featureText = view.Features.Count == 0
                 ? "немає"
-                : string.Join(", ", view.Features.Select(item => $"{item.Key}: {item.Value}"));
+                : string.Join(", ", view.Features.Select(item => $"{item.Key}={item.Value}"));
             Device.WriteLine($"  {view.Name}: {featureText}");
         }
     }

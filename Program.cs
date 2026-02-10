@@ -1,5 +1,7 @@
 using ClanBattleGame.Application.Battle;
+using ClanBattleGame.Application.Commands;
 using ClanBattleGame.Domain.Battle;
+using ClanBattleGame.Domain.Commands;
 using ClanBattleGame.Infrastructure.Repositories;
 using ClanBattleGame.Models;
 using ClanBattleGame.Rendering;
@@ -9,10 +11,12 @@ using ClanBattleGame.Services;
 var configPath = "config.json";
 var clanPath = "clan.json";
 var battleLogPath = "battle_log.json";
+var commandLogPath = "command_log.json";
 
 IConfigRepository configRepository = new JsonConfigRepository();
 IClanRepository clanRepository = new JsonClanRepository();
 IBattleLogRepository battleLogRepository = new JsonBattleLogRepository();
+ICommandLogRepository commandLogRepository = new JsonCommandLogRepository();
 
 var config = configRepository.LoadOrCreate(configPath);
 
@@ -24,6 +28,12 @@ ClanReport asciiReport = new ClanAsciiReport(new ConsoleAsciiDevice());
 
 Clan? clan = null;
 BattleLog? lastBattleLog = null;
+CommandLog commandLog = new() { StartedAt = DateTime.UtcNow };
+
+IClanMediator mediator = new ClanMediator(commandLog);
+IPlayerActionExecutor actionExecutor = new PlayerActionExecutor();
+ICommandHandler commandChain = BuildCommandChain();
+var commander = new ClanCommander(mediator, commandChain);
 
 while (true)
 {
@@ -35,10 +45,14 @@ while (true)
     Console.WriteLine("5) Зберегти клан у JSON (clan.json)");
     Console.WriteLine("6) Завантажити клан з JSON (clan.json)");
     Console.WriteLine("7) Переглянути/змінити налаштування (config.json)");
-    Console.WriteLine("8) Симуляція бою двох кланів (створити 2 клани і провести бій)");
-    Console.WriteLine("9) Показати останній журнал бою (з JSON)");
-    Console.WriteLine("10) Зберегти журнал бою у JSON (battle_log.json)");
-    Console.WriteLine("11) Завантажити журнал бою з JSON (battle_log.json)");
+    Console.WriteLine("8) Глава віддає випадкові команди (N кроків)");
+    Console.WriteLine("9) Показати останній лог команд");
+    Console.WriteLine("10) Зберегти лог у JSON (command_log.json)");
+    Console.WriteLine("11) Завантажити лог з JSON (command_log.json)");
+    Console.WriteLine("12) Симуляція бою двох кланів (створити 2 клани і провести бій)");
+    Console.WriteLine("13) Показати останній журнал бою (з JSON)");
+    Console.WriteLine("14) Зберегти журнал бою у JSON (battle_log.json)");
+    Console.WriteLine("15) Завантажити журнал бою з JSON (battle_log.json)");
     Console.WriteLine("0) Вихід");
     Console.Write("Обери пункт: ");
 
@@ -57,6 +71,9 @@ while (true)
 
             clan = clanGenerator.CreateClan(name, config);
             LeaderManager.Instance.RestoreLeader(clan, randomProvider);
+            commandLog = new CommandLog { StartedAt = DateTime.UtcNow, ClanName = clan.Name };
+            mediator = BuildMediator(clan, config, actionExecutor, commandLog);
+            commander = new ClanCommander(mediator, commandChain);
             Console.WriteLine("Клан створено.");
             break;
         case "2":
@@ -96,6 +113,9 @@ while (true)
             {
                 clan = loaded;
                 LeaderManager.Instance.RestoreLeader(clan, randomProvider);
+                commandLog = new CommandLog { StartedAt = DateTime.UtcNow, ClanName = clan.Name };
+                mediator = BuildMediator(clan, config, actionExecutor, commandLog);
+                commander = new ClanCommander(mediator, commandChain);
                 Console.WriteLine("Клан завантажено.");
             }
             break;
@@ -103,9 +123,73 @@ while (true)
             EditConfig(config, configRepository, configPath);
             config = configRepository.LoadOrCreate(configPath);
             (randomProvider, clanGenerator, battleSimulator, playerViewFactory) = BuildServices(config, damageCalculator);
+            if (clan is not null)
+            {
+                mediator = BuildMediator(clan, config, actionExecutor, commandLog);
+                commander = new ClanCommander(mediator, commandChain);
+            }
             Console.WriteLine("Налаштування оновлено.");
             break;
         case "8":
+            if (!EnsureClan(clan))
+            {
+                break;
+            }
+
+            var leader = LeaderManager.Instance.Leader;
+            if (leader is null)
+            {
+                Console.WriteLine("Глава клану не визначений.");
+                break;
+            }
+
+            Console.Write("Введи кількість кроків N: ");
+            if (!int.TryParse(Console.ReadLine(), out var stepsCount) || stepsCount <= 0)
+            {
+                Console.WriteLine("Некоректне N.");
+                break;
+            }
+
+            for (var step = 1; step <= stepsCount; step++)
+            {
+                foreach (var squad in clan!.Squads)
+                {
+                    var context = new CommandContext
+                    {
+                        Clan = clan!,
+                        TargetSquad = squad,
+                        Leader = leader,
+                        Random = randomProvider,
+                        Config = config,
+                        IsEnemyNear = randomProvider.NextInt(0, 100) < 35,
+                        IsInDanger = randomProvider.NextInt(0, 100) < 20,
+                        IsTooFarForward = squad.Position.X > config.FieldWidth * 3 / 4
+                    };
+
+                    commander.IssueGeneratedCommand(context);
+                }
+            }
+
+            PrintCommandSeriesSummary(clan!, commandLog);
+            Console.Write("Показати лог зараз? (y/n): ");
+            if (string.Equals(Console.ReadLine(), "y", StringComparison.OrdinalIgnoreCase))
+            {
+                ShowCommandLog(commandLog);
+            }
+            break;
+        case "9":
+            ShowCommandLog(commandLog);
+            break;
+        case "10":
+            commandLogRepository.Save(commandLogPath, commandLog);
+            Console.WriteLine("Лог команд збережено.");
+            break;
+        case "11":
+            commandLog = commandLogRepository.Load(commandLogPath);
+            Console.WriteLine("Лог команд завантажено.");
+            ShowCommandLog(commandLog);
+            break;
+        case "12":
             Console.Write("Назва клану A (Enter для стандартної): ");
             var clanAName = Console.ReadLine();
             if (string.IsNullOrWhiteSpace(clanAName))
@@ -125,7 +209,7 @@ while (true)
             lastBattleLog = battleSimulator.Simulate(clanA, clanB, config);
             ShowBattleSummary(lastBattleLog);
             break;
-        case "9":
+        case "13":
             var loadedLog = battleLogRepository.Load(battleLogPath);
             if (loadedLog is null)
             {
@@ -137,7 +221,7 @@ while (true)
                 ShowBattleLogShort(lastBattleLog);
             }
             break;
-        case "10":
+        case "14":
             if (lastBattleLog is null)
             {
                 Console.WriteLine("Немає журналу бою для збереження.");
@@ -148,7 +232,7 @@ while (true)
                 Console.WriteLine("Журнал бою збережено.");
             }
             break;
-        case "11":
+        case "15":
             var loadedBattleLog = battleLogRepository.Load(battleLogPath);
             if (loadedBattleLog is null)
             {
@@ -167,6 +251,29 @@ while (true)
             Console.WriteLine("Невідомий пункт меню.");
             break;
     }
+}
+
+static IClanMediator BuildMediator(Clan clan, AppConfig config, IPlayerActionExecutor actionExecutor, CommandLog commandLog)
+{
+    var mediator = new ClanMediator(commandLog);
+    mediator.RegisterClan(clan);
+    foreach (var squad in clan.Squads)
+    {
+        mediator.RegisterSquad(new SquadParticipant(squad, config, actionExecutor));
+    }
+
+    return mediator;
+}
+
+static ICommandHandler BuildCommandChain()
+{
+    var fight = new FightCommandHandler();
+    var backward = new BackwardCommandHandler();
+    var forward = new ForwardCommandHandler();
+    var fallback = new DefaultCommandHandler();
+
+    fight.SetNext(backward).SetNext(forward).SetNext(fallback);
+    return fight;
 }
 
 static List<IPlayerView> BuildViews(Clan clan, IPlayerViewFactory playerViewFactory)
@@ -216,6 +323,32 @@ static (IRandomProvider, IClanGenerator, IBattleSimulator, IPlayerViewFactory) B
     var battleSimulator = new BattleSimulator(randomProvider, damageCalculator);
     var playerViewFactory = new PlayerViewFactory();
     return (randomProvider, generator, battleSimulator, playerViewFactory);
+}
+
+static void PrintCommandSeriesSummary(Clan clan, CommandLog log)
+{
+    Console.WriteLine($"Виконано команд: {log.Entries.Count}");
+    foreach (var squad in clan.Squads)
+    {
+        var actions = squad.Players.Sum(player => player.ActionsPerformed);
+        Console.WriteLine($"Загін #{squad.SquadId}: позиція=({squad.Position.X},{squad.Position.Y}), дій Fight={actions}");
+    }
+}
+
+static void ShowCommandLog(CommandLog log)
+{
+    Console.WriteLine($"Клан: {log.ClanName}");
+    Console.WriteLine($"Початок: {log.StartedAt:yyyy-MM-dd HH:mm:ss}");
+    if (log.Entries.Count == 0)
+    {
+        Console.WriteLine("Лог порожній.");
+        return;
+    }
+
+    foreach (var entry in log.Entries)
+    {
+        Console.WriteLine($"[{entry.Timestamp:HH:mm:ss}] Загін #{entry.SquadId} ({entry.SquadType}) -> {entry.CommandType}; Гравців: {entry.PlayersAffected}; {entry.Summary}");
+    }
 }
 
 static void EditConfig(AppConfig config, IConfigRepository repository, string path)

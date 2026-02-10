@@ -20,3 +20,10 @@ public enum MovementType
     Horse,
     Fly
 }
+
+public enum SquadCommandType
+{
+    Forward,
+    Backward,
+    Fight
+}
