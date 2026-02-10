@@ -61,7 +61,7 @@ while (true)
     Console.WriteLine("10) Зберегти лог у JSON (command_log.json)");
     Console.WriteLine("11) Завантажити лог з JSON (command_log.json)");
     Console.WriteLine("12) Грати: почергові команди двох кланів (N ходів)");
-    Console.WriteLine("13) Undo останньої команди");
+    Console.WriteLine("13) Скасувати останню команду");
     Console.WriteLine("14) Показати історію команд (останні 20)");
     Console.WriteLine("15) Зберегти історію команд у JSON");
     Console.WriteLine("16) Завантажити історію команд з JSON");
@@ -110,7 +110,7 @@ while (true)
         case "4":
             if (EnsureClan(clan))
             {
-                ShowLeader(textReport, playerViewFactory);
+                ShowLeader(clan!, textReport, playerViewFactory);
             }
             break;
         case "5":
@@ -275,6 +275,8 @@ void PlayTurns()
         PositionClan(gameSession.ClanB, config.FieldWidth / 2 + 2, config.FieldHeight / 2, config, randomProvider);
         gameSession.TurnIndex = 0;
         gameSession.CurrentClan = "A";
+        LeaderManager.Instance.RestoreLeader(gameSession.ClanA, randomProvider);
+        LeaderManager.Instance.RestoreLeader(gameSession.ClanB, randomProvider);
         Console.WriteLine("Створено два клани для почергової гри.");
     }
 
@@ -297,6 +299,9 @@ void PlayTurns()
             Console.WriteLine("Клан для ходу не знайдено.");
             return;
         }
+
+        var leaderName = GetLeaderDisplayName(clanToPlay);
+        Console.WriteLine($"Лідер клану {clanLabel}: {leaderName}");
 
         Console.WriteLine($"Хід {turn}/{turns}, зараз грає клан {clanLabel}");
         ExecuteClanTurn(clanToPlay, clanLabel);
@@ -503,11 +508,52 @@ static bool EnsureClan(Clan? clan)
     return true;
 }
 
-static void ShowLeader(ClanReport report, IPlayerViewFactory playerViewFactory)
+static string GetLeaderDisplayName(Clan clan)
 {
-    var leader = LeaderManager.Instance.Leader;
+    var leader = ResolveLeaderFromClan(clan);
+    if (leader is not null)
+    {
+        return leader.Name;
+    }
+
+    if (clan.LeaderSnapshot is not null)
+    {
+        return clan.LeaderSnapshot.Name;
+    }
+
+    return "не визначений";
+}
+
+static Player? ResolveLeaderFromClan(Clan clan)
+{
+    if (!clan.LeaderId.HasValue)
+    {
+        return null;
+    }
+
+    return clan.Squads
+        .SelectMany(squad => squad.Players)
+        .FirstOrDefault(player => player.Id == clan.LeaderId.Value);
+}
+
+static void ShowLeader(Clan clan, ClanReport report, IPlayerViewFactory playerViewFactory)
+{
+    var leader = ResolveLeaderFromClan(clan);
     if (leader is null)
     {
+        if (clan.LeaderSnapshot is not null)
+        {
+            var snapshot = clan.LeaderSnapshot;
+            Console.WriteLine("Глава клану:");
+            Console.WriteLine($"  Ім'я: {snapshot.Name}");
+            Console.WriteLine($"  Id: {snapshot.Id}");
+            Console.WriteLine($"  Раса: {snapshot.RaceType}");
+            Console.WriteLine($"  Зброя: {snapshot.WeaponType}");
+            Console.WriteLine($"  Пересування: {snapshot.MovementType}");
+            Console.WriteLine($"  Стати: Атк {snapshot.Stats.Attack}, Зах {snapshot.Stats.Defense}, Шв {snapshot.Stats.Speed}, HP {snapshot.Stats.Health}");
+            return;
+        }
+
         Console.WriteLine("Глава клану не визначений.");
         return;
     }
