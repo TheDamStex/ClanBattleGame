@@ -14,6 +14,7 @@ public sealed class AppConfig
     public int SquadCount { get; set; } = 4;
     public int MinPlayersPerSquad { get; set; } = 3;
     public int MaxPlayersPerSquad { get; set; } = 8;
+    public int MaxRounds { get; set; } = 50;
     public int? RandomSeed { get; set; }
     public RaceStatRanges StatRanges { get; set; } = new();
 }
