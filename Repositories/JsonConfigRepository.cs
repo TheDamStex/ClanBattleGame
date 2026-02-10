@@ -25,6 +25,7 @@ public sealed class JsonConfigRepository : IConfigRepository
             {
                 config = CreateDefault();
             }
+
             Normalize(config);
             return config;
         }
@@ -57,6 +58,11 @@ public sealed class JsonConfigRepository : IConfigRepository
             MaxPlayersPerSquad = 8,
             MaxRounds = 50,
             RandomSeed = null,
+            AvailableColors = new List<string> { "червоний", "синій", "зелений", "чорний", "білий" },
+            AvailableClothingTypes = new List<string> { "броня", "мантія", "шкіра" },
+            MinHeightCm = 150,
+            MaxHeightCm = 210,
+            FeatureChancePercent = 50,
             StatRanges = new RaceStatRanges
             {
                 Warrior = new StatsRange
@@ -113,5 +119,10 @@ public sealed class JsonConfigRepository : IConfigRepository
         config.StatRanges.Warrior ??= new StatsRange();
         config.StatRanges.Elf ??= new StatsRange();
         config.StatRanges.Dwarf ??= new StatsRange();
+        config.AvailableColors ??= new List<string>();
+        config.AvailableClothingTypes ??= new List<string>();
+        config.MinHeightCm = Math.Clamp(config.MinHeightCm, 100, 250);
+        config.MaxHeightCm = Math.Clamp(config.MaxHeightCm, config.MinHeightCm, 260);
+        config.FeatureChancePercent = Math.Clamp(config.FeatureChancePercent, 0, 100);
     }
 }

@@ -17,9 +17,10 @@ IBattleLogRepository battleLogRepository = new JsonBattleLogRepository();
 var config = configRepository.LoadOrCreate(configPath);
 
 IDamageCalculator damageCalculator = new SimpleDamageCalculator();
-var (randomProvider, clanGenerator, battleSimulator) = BuildServices(config, damageCalculator);
-IClanRenderer textRenderer = new TextClanRenderer();
-IClanRenderer asciiRenderer = new AsciiClanRenderer();
+var (randomProvider, clanGenerator, battleSimulator, playerViewFactory) = BuildServices(config, damageCalculator);
+
+ClanReport textReport = new ClanTextReport(new ConsoleTextDevice());
+ClanReport asciiReport = new ClanAsciiReport(new ConsoleAsciiDevice());
 
 Clan? clan = null;
 BattleLog? lastBattleLog = null;
@@ -61,19 +62,21 @@ while (true)
         case "2":
             if (EnsureClan(clan))
             {
-                textRenderer.Render(clan!, config);
+                var views = BuildViews(clan!, playerViewFactory);
+                textReport.ShowClan(clan!, views, config);
             }
             break;
         case "3":
             if (EnsureClan(clan))
             {
-                asciiRenderer.Render(clan!, config);
+                var views = BuildViews(clan!, playerViewFactory);
+                asciiReport.ShowClan(clan!, views, config);
             }
             break;
         case "4":
             if (EnsureClan(clan))
             {
-                ShowLeader(clan!);
+                ShowLeader(textReport, playerViewFactory);
             }
             break;
         case "5":
@@ -99,7 +102,7 @@ while (true)
         case "7":
             EditConfig(config, configRepository, configPath);
             config = configRepository.LoadOrCreate(configPath);
-            (randomProvider, clanGenerator, battleSimulator) = BuildServices(config, damageCalculator);
+            (randomProvider, clanGenerator, battleSimulator, playerViewFactory) = BuildServices(config, damageCalculator);
             Console.WriteLine("Налаштування оновлено.");
             break;
         case "8":
@@ -155,6 +158,7 @@ while (true)
             {
                 lastBattleLog = loadedBattleLog;
                 Console.WriteLine("Журнал бою завантажено.");
+                ShowBattleLogShort(lastBattleLog);
             }
             break;
         case "0":
@@ -165,18 +169,26 @@ while (true)
     }
 }
 
+static List<IPlayerView> BuildViews(Clan clan, IPlayerViewFactory playerViewFactory)
+{
+    return clan.Squads
+        .SelectMany(s => s.Players)
+        .Select(playerViewFactory.Create)
+        .ToList();
+}
+
 static bool EnsureClan(Clan? clan)
 {
     if (clan is null)
     {
-        Console.WriteLine("Клан ще не створено або не завантажено.");
+        Console.WriteLine("Спочатку створи або завантаж клан.");
         return false;
     }
 
     return true;
 }
 
-static void ShowLeader(Clan clan)
+static void ShowLeader(ClanReport report, IPlayerViewFactory playerViewFactory)
 {
     var leader = LeaderManager.Instance.Leader;
     if (leader is null)
@@ -185,18 +197,14 @@ static void ShowLeader(Clan clan)
         return;
     }
 
-    Console.WriteLine("Глава клану:");
-    Console.WriteLine($"  Ім'я: {leader.Name}");
-    Console.WriteLine($"  Id: {leader.Id}");
-    Console.WriteLine($"  Раса: {leader.RaceType}");
-    Console.WriteLine($"  Зброя: {leader.WeaponType}");
-    Console.WriteLine($"  Пересування: {leader.MovementType}");
-    Console.WriteLine($"  Стати: Атк {leader.Stats.Attack}, Зах {leader.Stats.Defense}, Шв {leader.Stats.Speed}, HP {leader.Stats.Health}");
+    var leaderView = playerViewFactory.Create(leader);
+    report.ShowLeader(leader, leaderView);
 }
 
-static (IRandomProvider, IClanGenerator, IBattleSimulator) BuildServices(AppConfig config, IDamageCalculator damageCalculator)
+static (IRandomProvider, IClanGenerator, IBattleSimulator, IPlayerViewFactory) BuildServices(AppConfig config, IDamageCalculator damageCalculator)
 {
     var randomProvider = new DefaultRandomProvider(config.RandomSeed);
+    var featureGenerator = new PlayerFeatureGenerator(randomProvider);
     var factories = new IPlayerFactory[]
     {
         new WarriorPlayerFactory(randomProvider),
@@ -204,9 +212,10 @@ static (IRandomProvider, IClanGenerator, IBattleSimulator) BuildServices(AppConf
         new DwarfPlayerFactory(randomProvider)
     };
 
-    var generator = new ClanGenerator(randomProvider, factories);
+    var generator = new ClanGenerator(randomProvider, factories, featureGenerator);
     var battleSimulator = new BattleSimulator(randomProvider, damageCalculator);
-    return (randomProvider, generator, battleSimulator);
+    var playerViewFactory = new PlayerViewFactory();
+    return (randomProvider, generator, battleSimulator, playerViewFactory);
 }
 
 static void EditConfig(AppConfig config, IConfigRepository repository, string path)
@@ -219,6 +228,28 @@ static void EditConfig(AppConfig config, IConfigRepository repository, string pa
     config.MinPlayersPerSquad = ReadInt("Мінімум гравців у загоні", config.MinPlayersPerSquad);
     config.MaxPlayersPerSquad = ReadInt("Максимум гравців у загоні", config.MaxPlayersPerSquad);
     config.MaxRounds = ReadInt("Максимум раундів бою", config.MaxRounds);
+    config.MinHeightCm = ReadInt("Мінімальний зріст (см)", config.MinHeightCm);
+    config.MaxHeightCm = ReadInt("Максимальний зріст (см)", config.MaxHeightCm);
+    config.FeatureChancePercent = ReadInt("Ймовірність ознаки (%)", config.FeatureChancePercent);
+
+    Console.Write($"Кольори через кому (поточні: {string.Join(", ", config.AvailableColors)}), Enter щоб лишити: ");
+    var colorsInput = Console.ReadLine();
+    if (!string.IsNullOrWhiteSpace(colorsInput))
+    {
+        config.AvailableColors = colorsInput
+            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .ToList();
+    }
+
+    Console.Write($"Типи одягу через кому (поточні: {string.Join(", ", config.AvailableClothingTypes)}), Enter щоб лишити: ");
+    var clothingInput = Console.ReadLine();
+    if (!string.IsNullOrWhiteSpace(clothingInput))
+    {
+        config.AvailableClothingTypes = clothingInput
+            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .ToList();
+    }
+
     Console.Write($"RandomSeed (поточне {(config.RandomSeed.HasValue ? config.RandomSeed.Value.ToString() : "null")}) нове значення або Enter: ");
     var randomSeedInput = Console.ReadLine();
     if (string.IsNullOrWhiteSpace(randomSeedInput))
@@ -244,6 +275,10 @@ static void PrintConfig(AppConfig config)
     Console.WriteLine($"  Загонів: {config.SquadCount}");
     Console.WriteLine($"  Гравців у загоні: {config.MinPlayersPerSquad}-{config.MaxPlayersPerSquad}");
     Console.WriteLine($"  Максимум раундів бою: {config.MaxRounds}");
+    Console.WriteLine($"  Зріст: {config.MinHeightCm}-{config.MaxHeightCm} см");
+    Console.WriteLine($"  Шанс ознаки: {config.FeatureChancePercent}%");
+    Console.WriteLine($"  Кольори: {string.Join(", ", config.AvailableColors)}");
+    Console.WriteLine($"  Типи одягу: {string.Join(", ", config.AvailableClothingTypes)}");
     Console.WriteLine($"  Seed: {(config.RandomSeed.HasValue ? config.RandomSeed.Value : "випадковий")}");
 }
 
