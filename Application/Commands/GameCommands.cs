@@ -230,7 +230,7 @@ public abstract class GameCommandBase : IGameCommand
 public sealed class ForwardCommand : GameCommandBase
 {
     public ForwardCommand(string clanName, int squadId, SquadCommandReceiver receiver)
-        : base("Forward", clanName, squadId, receiver, SquadCommandType.Forward)
+        : base("Вперед", clanName, squadId, receiver, SquadCommandType.Forward)
     {
     }
 }
@@ -238,7 +238,7 @@ public sealed class ForwardCommand : GameCommandBase
 public sealed class BackwardCommand : GameCommandBase
 {
     public BackwardCommand(string clanName, int squadId, SquadCommandReceiver receiver)
-        : base("Backward", clanName, squadId, receiver, SquadCommandType.Backward)
+        : base("Назад", clanName, squadId, receiver, SquadCommandType.Backward)
     {
     }
 }
@@ -246,7 +246,7 @@ public sealed class BackwardCommand : GameCommandBase
 public sealed class FightCommand : GameCommandBase
 {
     public FightCommand(string clanName, int squadId, SquadCommandReceiver receiver)
-        : base("Fight", clanName, squadId, receiver, SquadCommandType.Fight)
+        : base("Битися", clanName, squadId, receiver, SquadCommandType.Fight)
     {
     }
 }
