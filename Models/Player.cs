@@ -9,6 +9,7 @@ public sealed class Player
     public MovementType MovementType { get; set; }
     public Stats Stats { get; set; } = new();
     public Position Position { get; set; }
+    public Dictionary<string, string> Features { get; set; } = new();
 }
 
 public sealed class LeaderSnapshot

@@ -17,4 +17,9 @@ public sealed class AppConfig
     public int MaxRounds { get; set; } = 50;
     public int? RandomSeed { get; set; }
     public RaceStatRanges StatRanges { get; set; } = new();
+    public List<string> AvailableColors { get; set; } = new();
+    public List<string> AvailableClothingTypes { get; set; } = new();
+    public int MinHeightCm { get; set; } = 150;
+    public int MaxHeightCm { get; set; } = 210;
+    public int FeatureChancePercent { get; set; } = 50;
 }

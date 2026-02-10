@@ -24,13 +24,18 @@ public interface IConfigRepository
     void Save(string path, AppConfig config);
 }
 
-public interface IClanRenderer
-{
-    void Render(Clan clan, AppConfig config);
-}
-
 public interface IPlayerFactory
 {
     Player CreatePlayer(int index, Position squadPosition, AppConfig config);
     RaceType RaceType { get; }
+}
+
+public interface IPlayerViewFactory
+{
+    IPlayerView Create(Player player);
+}
+
+public interface IPlayerFeatureGenerator
+{
+    Dictionary<string, string> Generate(AppConfig config);
 }

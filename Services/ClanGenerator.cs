@@ -7,11 +7,13 @@ public sealed class ClanGenerator : IClanGenerator
 {
     private readonly IRandomProvider _randomProvider;
     private readonly IReadOnlyList<IPlayerFactory> _factories;
+    private readonly IPlayerFeatureGenerator _featureGenerator;
 
-    public ClanGenerator(IRandomProvider randomProvider, IEnumerable<IPlayerFactory> factories)
+    public ClanGenerator(IRandomProvider randomProvider, IEnumerable<IPlayerFactory> factories, IPlayerFeatureGenerator featureGenerator)
     {
         _randomProvider = randomProvider;
         _factories = factories.ToList();
+        _featureGenerator = featureGenerator;
     }
 
     public Clan CreateClan(string name, AppConfig config)
@@ -45,7 +47,9 @@ public sealed class ClanGenerator : IClanGenerator
 
             for (var playerIndex = 0; playerIndex < playersCount; playerIndex++)
             {
-                squad.Players.Add(factory.CreatePlayer(playerIndex + 1, squadPosition, config));
+                var player = factory.CreatePlayer(playerIndex + 1, squadPosition, config);
+                player.Features = _featureGenerator.Generate(config);
+                squad.Players.Add(player);
             }
 
             clan.Squads.Add(squad);
