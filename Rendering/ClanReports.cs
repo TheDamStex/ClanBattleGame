@@ -53,6 +53,7 @@ public sealed class ClanTextReport : ClanReport
                 Device.WriteLine($"    Стати: Атк {view.Stats.Attack}, Зах {view.Stats.Defense}, Шв {view.Stats.Speed}, HP {view.Stats.Health}");
                 Device.WriteLine($"    Позиція: ({view.Position.X},{view.Position.Y})");
                 Device.WriteLine($"    Виконано дій: {player.ActionsPerformed}");
+                Device.WriteLine($"    Стан: {player.StateType}");
                 if (view.Features.Count > 0)
                 {
                     var featureText = string.Join(", ", view.Features.Select(item => $"{item.Key}={item.Value}"));
@@ -95,11 +96,17 @@ public sealed class ClanAsciiReport : ClanReport
             PlaceSymbol(grid, width, height, squad.Position, GetSquadSymbol(squad.SquadType));
             foreach (var player in squad.Players)
             {
-                PlaceSymbol(grid, width, height, player.Position, GetPlayerSymbol(player.RaceType));
+                if (player.StateType == PlayerStateType.OutOfBattle)
+                {
+                    continue;
+                }
+
+                var playerSymbol = player.StateType == PlayerStateType.Wounded ? 'x' : GetPlayerSymbol(player.RaceType);
+                PlaceSymbol(grid, width, height, player.Position, playerSymbol);
             }
         }
 
-        Device.DrawMap(grid, "Легенда: W/E/G — загін, w/e/g — гравець, * — накладення, . — порожньо");
+        Device.DrawMap(grid, "Легенда: W/E/G — загін, w/e/g — гравець, x — поранений, * — накладення, . — порожньо");
 
         var views = playersView.ToList();
         if (views.Count == 0)

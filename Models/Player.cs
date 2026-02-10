@@ -11,6 +11,7 @@ public sealed class Player
     public Position Position { get; set; }
     public Dictionary<string, string> Features { get; set; } = new();
     public int ActionsPerformed { get; set; }
+    public PlayerStateType StateType { get; set; } = PlayerStateType.Healthy;
 }
 
 public sealed class LeaderSnapshot

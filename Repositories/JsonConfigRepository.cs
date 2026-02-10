@@ -63,6 +63,8 @@ public sealed class JsonConfigRepository : IConfigRepository
             MinHeightCm = 150,
             MaxHeightCm = 210,
             FeatureChancePercent = 50,
+            HitChancePercent = 30,
+            MaxTurns = 5,
             StatRanges = new RaceStatRanges
             {
                 Warrior = new StatsRange
@@ -124,5 +126,7 @@ public sealed class JsonConfigRepository : IConfigRepository
         config.MinHeightCm = Math.Clamp(config.MinHeightCm, 100, 250);
         config.MaxHeightCm = Math.Clamp(config.MaxHeightCm, config.MinHeightCm, 260);
         config.FeatureChancePercent = Math.Clamp(config.FeatureChancePercent, 0, 100);
+        config.HitChancePercent = Math.Clamp(config.HitChancePercent, 0, 100);
+        config.MaxTurns = Math.Max(1, config.MaxTurns);
     }
 }

@@ -22,4 +22,6 @@ public sealed class AppConfig
     public int MinHeightCm { get; set; } = 150;
     public int MaxHeightCm { get; set; } = 210;
     public int FeatureChancePercent { get; set; } = 50;
+    public int HitChancePercent { get; set; } = 30;
+    public int MaxTurns { get; set; } = 5;
 }
