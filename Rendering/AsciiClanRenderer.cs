@@ -21,11 +21,14 @@ public sealed class AsciiClanRenderer : IClanRenderer
 
         foreach (var squad in clan.Squads)
         {
-            var symbol = GetSymbol(squad.SquadType);
-            var x = Math.Clamp(squad.Position.X, 0, width - 1);
-            var y = Math.Clamp(squad.Position.Y, 0, height - 1);
+            var squadSymbol = GetSquadSymbol(squad.SquadType);
+            PlaceSymbol(grid, width, height, squad.Position, squadSymbol);
 
-            grid[y, x] = grid[y, x] == '.' ? symbol : '*';
+            foreach (var player in squad.Players)
+            {
+                var playerSymbol = GetPlayerSymbol(player.RaceType);
+                PlaceSymbol(grid, width, height, player.Position, playerSymbol);
+            }
         }
 
         PrintBorder(width);
@@ -40,10 +43,10 @@ public sealed class AsciiClanRenderer : IClanRenderer
         }
         PrintBorder(width);
 
-        Console.WriteLine("Легенда: W - воїни, E - ельфи, G - гноми, * - накладення, . - порожньо");
+        Console.WriteLine("Легенда: W/E/G — загін, w/e/g — гравець, * — накладення, . — порожньо");
     }
 
-    private static char GetSymbol(RaceType raceType)
+    private static char GetSquadSymbol(RaceType raceType)
     {
         return raceType switch
         {
@@ -52,6 +55,24 @@ public sealed class AsciiClanRenderer : IClanRenderer
             RaceType.Dwarf => 'G',
             _ => '?'
         };
+    }
+
+    private static char GetPlayerSymbol(RaceType raceType)
+    {
+        return raceType switch
+        {
+            RaceType.Warrior => 'w',
+            RaceType.Elf => 'e',
+            RaceType.Dwarf => 'g',
+            _ => '?'
+        };
+    }
+
+    private static void PlaceSymbol(char[,] grid, int width, int height, Position position, char symbol)
+    {
+        var x = Math.Clamp(position.X, 0, width - 1);
+        var y = Math.Clamp(position.Y, 0, height - 1);
+        grid[y, x] = grid[y, x] == '.' ? symbol : '*';
     }
 
     private static void PrintBorder(int width)

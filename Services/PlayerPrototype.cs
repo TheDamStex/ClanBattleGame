@@ -2,6 +2,7 @@ using ClanBattleGame.Models;
 
 namespace ClanBattleGame.Services;
 
+// Prototype для швидкого копіювання гравця.
 public sealed class PlayerPrototype
 {
     private readonly Player _template;
