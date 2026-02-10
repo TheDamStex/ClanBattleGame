@@ -2,6 +2,7 @@ using ClanBattleGame.Models;
 
 namespace ClanBattleGame.Services;
 
+// Відповідає за створення структури клану.
 public sealed class ClanGenerator : IClanGenerator
 {
     private readonly IRandomProvider _randomProvider;
@@ -20,9 +21,14 @@ public sealed class ClanGenerator : IClanGenerator
             Name = name
         };
 
-        for (var squadIndex = 0; squadIndex < config.SquadCount; squadIndex++)
+        var requiredTypes = new[] { RaceType.Warrior, RaceType.Elf, RaceType.Dwarf };
+        var totalSquads = Math.Max(config.SquadCount, requiredTypes.Length);
+
+        for (var squadIndex = 0; squadIndex < totalSquads; squadIndex++)
         {
-            var squadType = (RaceType)_randomProvider.NextInt(0, 3);
+            var squadType = squadIndex < requiredTypes.Length
+                ? requiredTypes[squadIndex]
+                : _factories[_randomProvider.NextInt(0, _factories.Count)].RaceType;
             var squadPosition = new Position(
                 _randomProvider.NextInt(0, config.FieldWidth),
                 _randomProvider.NextInt(0, config.FieldHeight));

@@ -2,6 +2,7 @@ using ClanBattleGame.Models;
 
 namespace ClanBattleGame.Services;
 
+// Factory Method для створення гравців певного типу.
 public abstract class PlayerFactoryBase : IPlayerFactory
 {
     private readonly IRandomProvider _randomProvider;
@@ -51,6 +52,7 @@ public abstract class PlayerFactoryBase : IPlayerFactory
 
 public sealed class WarriorPlayerFactory : PlayerFactoryBase
 {
+    // Factory Method для створення воїнів.
     public WarriorPlayerFactory(IRandomProvider randomProvider)
         : base(randomProvider, new PlayerPrototype(new Player
         {
@@ -69,6 +71,7 @@ public sealed class WarriorPlayerFactory : PlayerFactoryBase
 
 public sealed class ElfPlayerFactory : PlayerFactoryBase
 {
+    // Factory Method для створення ельфів.
     public ElfPlayerFactory(IRandomProvider randomProvider)
         : base(randomProvider, new PlayerPrototype(new Player
         {
@@ -87,6 +90,7 @@ public sealed class ElfPlayerFactory : PlayerFactoryBase
 
 public sealed class DwarfPlayerFactory : PlayerFactoryBase
 {
+    // Factory Method для створення гномів.
     public DwarfPlayerFactory(IRandomProvider randomProvider)
         : base(randomProvider, new PlayerPrototype(new Player
         {

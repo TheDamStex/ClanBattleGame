@@ -4,6 +4,7 @@ using ClanBattleGame.Services;
 
 namespace ClanBattleGame.Repositories;
 
+// Робота з JSON для збереження та завантаження клану.
 public sealed class JsonClanRepository : IClanRepository
 {
     private readonly JsonSerializerOptions _options = new() { WriteIndented = true };

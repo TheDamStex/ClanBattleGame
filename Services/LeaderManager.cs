@@ -2,6 +2,7 @@ using ClanBattleGame.Models;
 
 namespace ClanBattleGame.Services;
 
+// Одинак (Singleton) для збереження глави клану.
 public sealed class LeaderManager
 {
     private static readonly Lazy<LeaderManager> LazyInstance = new(() => new LeaderManager());
