@@ -1,5 +1,6 @@
 using ClanBattleGame.Application.Battle;
 using ClanBattleGame.Application.Commands;
+using ClanBattleGame.Application.Memento;
 using ClanBattleGame.Domain.Commands;
 using ClanBattleGame.Infrastructure.Repositories;
 using ClanBattleGame.Models;
@@ -11,6 +12,7 @@ var configPath = "config.json";
 var clanPath = "clan.json";
 var commandLogPath = "command_log.json";
 var commandHistoryPath = "command_history.json";
+var checkpointPath = "checkpoint.json";
 
 IConfigRepository configRepository = new JsonConfigRepository();
 IClanRepository clanRepository = new JsonClanRepository();
@@ -28,6 +30,14 @@ ClanReport asciiReport = new ClanAsciiReport(new ConsoleAsciiDevice());
 Clan? clan = null;
 CommandLog commandLog = new() { StartedAt = DateTime.UtcNow };
 GameCommandHistory commandHistory = new();
+var checkpointManager = new CheckpointManager();
+var gameSession = new GameSession
+{
+    CurrentClan = "A",
+    RandomSeed = config.RandomSeed,
+    CommandHistory = commandHistory,
+    Config = config
+};
 
 IClanMediator mediator = new ClanMediator(commandLog);
 IPlayerActionExecutor actionExecutor = new PlayerActionExecutor();
@@ -35,8 +45,6 @@ ICommandHandler commandChain = BuildCommandChain();
 var commander = new ClanCommander(mediator, commandChain);
 
 var invoker = new CommandInvoker();
-Clan? gameClanA = null;
-Clan? gameClanB = null;
 
 while (true)
 {
@@ -57,6 +65,11 @@ while (true)
     Console.WriteLine("14) Показати історію команд (останні 20)");
     Console.WriteLine("15) Зберегти історію команд у JSON");
     Console.WriteLine("16) Завантажити історію команд з JSON");
+    Console.WriteLine("17) Створити контрольну точку (checkpoint)");
+    Console.WriteLine("18) Відновити контрольну точку");
+    Console.WriteLine("19) Зберегти контрольні точки у JSON (checkpoint.json)");
+    Console.WriteLine("20) Завантажити контрольні точки з JSON (checkpoint.json)");
+    Console.WriteLine("21) Показати список контрольних точок");
     Console.WriteLine("0) Вихід");
     Console.Write("Обери пункт: ");
 
@@ -127,6 +140,8 @@ while (true)
             EditConfig(config, configRepository, configPath);
             config = configRepository.LoadOrCreate(configPath);
             (randomProvider, clanGenerator, _, playerViewFactory) = BuildServices(config, damageCalculator);
+            gameSession.Config = config;
+            gameSession.RandomSeed = config.RandomSeed;
             if (clan is not null)
             {
                 mediator = BuildMediator(clan, config, actionExecutor, commandLog);
@@ -205,9 +220,9 @@ while (true)
                 }
 
                 Console.WriteLine("Останню команду скасовано.");
-                if (gameClanA is not null && gameClanB is not null)
+                if (gameSession.ClanA is not null && gameSession.ClanB is not null)
                 {
-                    ShowTwoClansMap(gameClanA, gameClanB, config);
+                    ShowTwoClansMap(gameSession.ClanA, gameSession.ClanB, config);
                 }
             }
 
@@ -221,8 +236,26 @@ while (true)
             break;
         case "16":
             commandHistory = commandHistoryRepository.Load(commandHistoryPath);
+            gameSession.CommandHistory = commandHistory;
             Console.WriteLine("Історію команд завантажено.");
             ShowLastHistory(commandHistory);
+            break;
+        case "17":
+            CreateCheckpoint();
+            break;
+        case "18":
+            RestoreCheckpoint();
+            break;
+        case "19":
+            checkpointManager.SaveToFile(checkpointPath);
+            Console.WriteLine("Контрольні точки збережено.");
+            break;
+        case "20":
+            checkpointManager.LoadFromFile(checkpointPath);
+            Console.WriteLine("Контрольні точки завантажено.");
+            break;
+        case "21":
+            ShowCheckpoints();
             break;
         case "0":
             return;
@@ -234,12 +267,14 @@ while (true)
 
 void PlayTurns()
 {
-    if (gameClanA is null || gameClanB is null)
+    if (gameSession.ClanA is null || gameSession.ClanB is null)
     {
-        gameClanA = clanGenerator.CreateClan("Клан A", config);
-        gameClanB = clanGenerator.CreateClan("Клан B", config);
-        PositionClan(gameClanA, config.FieldWidth / 2 - 2, config.FieldHeight / 2, config, randomProvider);
-        PositionClan(gameClanB, config.FieldWidth / 2 + 2, config.FieldHeight / 2, config, randomProvider);
+        gameSession.ClanA = clanGenerator.CreateClan("Клан A", config);
+        gameSession.ClanB = clanGenerator.CreateClan("Клан B", config);
+        PositionClan(gameSession.ClanA, config.FieldWidth / 2 - 2, config.FieldHeight / 2, config, randomProvider);
+        PositionClan(gameSession.ClanB, config.FieldWidth / 2 + 2, config.FieldHeight / 2, config, randomProvider);
+        gameSession.TurnIndex = 0;
+        gameSession.CurrentClan = "A";
         Console.WriteLine("Створено два клани для почергової гри.");
     }
 
@@ -255,11 +290,23 @@ void PlayTurns()
 
     for (var turn = 1; turn <= turns; turn++)
     {
-        Console.WriteLine($"Хід {turn}/{turns}");
-        ExecuteClanTurn(gameClanA, "A");
-        ShowTwoClansMap(gameClanA, gameClanB, config);
-        ExecuteClanTurn(gameClanB, "B");
-        ShowTwoClansMap(gameClanA, gameClanB, config);
+        var clanLabel = gameSession.CurrentClan == "B" ? "B" : "A";
+        var clanToPlay = clanLabel == "A" ? gameSession.ClanA : gameSession.ClanB;
+        if (clanToPlay is null)
+        {
+            Console.WriteLine("Клан для ходу не знайдено.");
+            return;
+        }
+
+        Console.WriteLine($"Хід {turn}/{turns}, зараз грає клан {clanLabel}");
+        ExecuteClanTurn(clanToPlay, clanLabel);
+        gameSession.TurnIndex += 1;
+        gameSession.CurrentClan = clanLabel == "A" ? "B" : "A";
+
+        if (gameSession.ClanA is not null && gameSession.ClanB is not null)
+        {
+            ShowTwoClansMap(gameSession.ClanA, gameSession.ClanB, config);
+        }
     }
 }
 
@@ -523,6 +570,84 @@ static void ShowLastHistory(GameCommandHistory history)
     foreach (var entry in history.Entries.TakeLast(20))
     {
         Console.WriteLine($"[{entry.Timestamp:HH:mm:ss}] {entry.ClanName}, загін #{entry.SquadId}, {entry.CommandType}, гравців: {entry.PlayersAffected}, {entry.Summary}");
+    }
+}
+
+void CreateCheckpoint()
+{
+    if (gameSession.ClanA is null || gameSession.ClanB is null)
+    {
+        Console.WriteLine("Немає активної гри для створення контрольної точки.");
+        return;
+    }
+
+    gameSession.Config = config;
+    gameSession.RandomSeed = config.RandomSeed;
+    gameSession.CommandHistory = commandHistory;
+
+    Console.Write("Введи назву контрольної точки: ");
+    var checkpointName = Console.ReadLine() ?? string.Empty;
+    var checkpoint = checkpointManager.CreateCheckpoint(gameSession, checkpointName);
+    Console.WriteLine($"Створено контрольну точку: {checkpoint.Name}.");
+}
+
+void RestoreCheckpoint()
+{
+    var checkpoints = checkpointManager.GetAll();
+    if (checkpoints.Count == 0)
+    {
+        Console.WriteLine("Контрольних точок немає.");
+        return;
+    }
+
+    for (var i = 0; i < checkpoints.Count; i++)
+    {
+        var point = checkpoints[i];
+        Console.WriteLine($"{i + 1}) {point.Name} ({point.CreatedAt:yyyy-MM-dd HH:mm:ss})");
+    }
+
+    Console.Write("Вибери номер контрольної точки: ");
+    var indexInput = Console.ReadLine();
+    if (!int.TryParse(indexInput, out var selected) || selected < 1 || selected > checkpoints.Count)
+    {
+        Console.WriteLine("Некоректний номер.");
+        return;
+    }
+
+    var chosen = checkpoints[selected - 1];
+    checkpointManager.RestoreCheckpoint(gameSession, chosen);
+
+    if (gameSession.Config is not null)
+    {
+        config = gameSession.Config;
+        (randomProvider, clanGenerator, _, playerViewFactory) = BuildServices(config, damageCalculator);
+    }
+
+    commandHistory = gameSession.CommandHistory;
+    invoker.Clear();
+
+    Console.WriteLine($"Відновлено контрольну точку: {chosen.Name}.");
+    Console.WriteLine($"Поточний хід: {gameSession.TurnIndex}, наступний клан: {gameSession.CurrentClan}.");
+
+    if (gameSession.ClanA is not null && gameSession.ClanB is not null)
+    {
+        ShowTwoClansMap(gameSession.ClanA, gameSession.ClanB, config);
+    }
+}
+
+void ShowCheckpoints()
+{
+    var checkpoints = checkpointManager.GetAll();
+    if (checkpoints.Count == 0)
+    {
+        Console.WriteLine("Контрольних точок немає.");
+        return;
+    }
+
+    for (var i = 0; i < checkpoints.Count; i++)
+    {
+        var point = checkpoints[i];
+        Console.WriteLine($"{i + 1}) {point.Name} — {point.CreatedAt:yyyy-MM-dd HH:mm:ss}");
     }
 }
 
