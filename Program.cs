@@ -7,6 +7,11 @@ using ClanBattleGame.Models;
 using ClanBattleGame.Rendering;
 using ClanBattleGame.Repositories;
 using ClanBattleGame.Services;
+using System.Text;
+
+// Потрібно для коректного відображення українських літер (і, ї, є, ґ) у консолі Windows.
+Console.InputEncoding = Encoding.UTF8;
+Console.OutputEncoding = Encoding.UTF8;
 
 var configPath = "config.json";
 var clanPath = "clan.json";
