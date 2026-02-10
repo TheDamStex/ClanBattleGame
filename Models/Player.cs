@@ -10,6 +10,7 @@ public sealed class Player
     public Stats Stats { get; set; } = new();
     public Position Position { get; set; }
     public Dictionary<string, string> Features { get; set; } = new();
+    public int ActionsPerformed { get; set; }
 }
 
 public sealed class LeaderSnapshot
