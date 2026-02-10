@@ -295,4 +295,10 @@ public sealed class CommandInvoker
         _history.RemoveAt(_history.Count - 1);
         return true;
     }
+
+    public void Clear()
+    {
+        _queue.Clear();
+        _history.Clear();
+    }
 }
