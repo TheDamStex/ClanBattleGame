@@ -167,7 +167,7 @@ public sealed class PlayerSnapshotDto
     public RaceType RaceType { get; set; }
     public WeaponType WeaponType { get; set; }
     public MovementType MovementType { get; set; }
-    public Stats Stats { get; set; } = new();
+    public StatsSnapshot Stats { get; set; } = new();
     public Position Position { get; set; }
     public Dictionary<string, string> Features { get; set; } = new();
     public int ActionsPerformed { get; set; }
@@ -182,16 +182,12 @@ public sealed class PlayerSnapshotDto
             RaceType = player.RaceType,
             WeaponType = player.WeaponType,
             MovementType = player.MovementType,
-            Stats = new Stats
+            Stats = new StatsSnapshot
             {
-                Strength = player.Stats.Strength,
-                Dexterity = player.Stats.Dexterity,
-                Intelligence = player.Stats.Intelligence,
-                MaxHealth = player.Stats.MaxHealth,
+                Attack = player.Stats.Attack,
+                Defense = player.Stats.Defense,
+                Speed = player.Stats.Speed,
                 Health = player.Stats.Health,
-                Armor = player.Stats.Armor,
-                Luck = player.Stats.Luck,
-                HeightCm = player.Stats.HeightCm
             },
             Position = player.Position,
             Features = new Dictionary<string, string>(player.Features),
@@ -211,14 +207,10 @@ public sealed class PlayerSnapshotDto
             MovementType = MovementType,
             Stats = new Stats
             {
-                Strength = Stats.Strength,
-                Dexterity = Stats.Dexterity,
-                Intelligence = Stats.Intelligence,
-                MaxHealth = Stats.MaxHealth,
+                Attack = Stats.Attack,
+                Defense = Stats.Defense,
+                Speed = Stats.Speed,
                 Health = Stats.Health,
-                Armor = Stats.Armor,
-                Luck = Stats.Luck,
-                HeightCm = Stats.HeightCm
             },
             Position = Position,
             Features = new Dictionary<string, string>(Features),
@@ -226,4 +218,12 @@ public sealed class PlayerSnapshotDto
             StateType = StateType
         };
     }
+}
+
+public sealed class StatsSnapshot
+{
+    public int Attack { get; set; }
+    public int Defense { get; set; }
+    public int Speed { get; set; }
+    public int Health { get; set; }
 }
