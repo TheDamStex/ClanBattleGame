@@ -55,6 +55,7 @@ public sealed class JsonConfigRepository : IConfigRepository
             SquadCount = 4,
             MinPlayersPerSquad = 3,
             MaxPlayersPerSquad = 8,
+            MaxRounds = 50,
             RandomSeed = null,
             StatRanges = new RaceStatRanges
             {
@@ -97,12 +98,17 @@ public sealed class JsonConfigRepository : IConfigRepository
 
     private static void Normalize(AppConfig config)
     {
+        // Мінімальний розмір поля.
         config.FieldWidth = Math.Max(10, config.FieldWidth);
         config.FieldHeight = Math.Max(5, config.FieldHeight);
         // Мінімум 3 загони, щоб у клані були воїни/ельфи/гноми.
         config.SquadCount = Math.Clamp(config.SquadCount, 3, 10);
+        // Мінімум 1 гравець у загоні.
         config.MinPlayersPerSquad = Math.Clamp(config.MinPlayersPerSquad, 1, 20);
+        // Максимум не менше мінімуму.
         config.MaxPlayersPerSquad = Math.Clamp(config.MaxPlayersPerSquad, config.MinPlayersPerSquad, 30);
+        // Мінімум 1 раунд бою.
+        config.MaxRounds = Math.Max(1, config.MaxRounds);
         config.StatRanges ??= new RaceStatRanges();
         config.StatRanges.Warrior ??= new StatsRange();
         config.StatRanges.Elf ??= new StatsRange();
