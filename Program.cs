@@ -151,6 +151,20 @@ static void EditConfig(AppConfig config, IConfigRepository repository, string pa
     config.SquadCount = ReadInt("Кількість загонів", config.SquadCount);
     config.MinPlayersPerSquad = ReadInt("Мінімум гравців у загоні", config.MinPlayersPerSquad);
     config.MaxPlayersPerSquad = ReadInt("Максимум гравців у загоні", config.MaxPlayersPerSquad);
+    Console.Write($"RandomSeed (поточне {(config.RandomSeed.HasValue ? config.RandomSeed.Value.ToString() : "null")}) нове значення або Enter: ");
+    var randomSeedInput = Console.ReadLine();
+    if (string.IsNullOrWhiteSpace(randomSeedInput))
+    {
+        config.RandomSeed = null;
+    }
+    else if (int.TryParse(randomSeedInput, out var seedValue))
+    {
+        config.RandomSeed = seedValue;
+    }
+    else
+    {
+        Console.WriteLine("Некоректне значення RandomSeed, залишено попереднє.");
+    }
 
     repository.Save(path, config);
 }

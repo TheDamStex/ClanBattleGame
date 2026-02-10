@@ -99,7 +99,8 @@ public sealed class JsonConfigRepository : IConfigRepository
     {
         config.FieldWidth = Math.Max(10, config.FieldWidth);
         config.FieldHeight = Math.Max(5, config.FieldHeight);
-        config.SquadCount = Math.Clamp(config.SquadCount, 1, 10);
+        // Мінімум 3 загони, щоб у клані були воїни/ельфи/гноми.
+        config.SquadCount = Math.Clamp(config.SquadCount, 3, 10);
         config.MinPlayersPerSquad = Math.Clamp(config.MinPlayersPerSquad, 1, 20);
         config.MaxPlayersPerSquad = Math.Clamp(config.MaxPlayersPerSquad, config.MinPlayersPerSquad, 30);
         config.StatRanges ??= new RaceStatRanges();
