@@ -27,3 +27,11 @@ public enum SquadCommandType
     Backward,
     Fight
 }
+
+
+public enum PlayerStateType
+{
+    Healthy,
+    Wounded,
+    OutOfBattle
+}

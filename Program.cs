@@ -1,6 +1,5 @@
 using ClanBattleGame.Application.Battle;
 using ClanBattleGame.Application.Commands;
-using ClanBattleGame.Domain.Battle;
 using ClanBattleGame.Domain.Commands;
 using ClanBattleGame.Infrastructure.Repositories;
 using ClanBattleGame.Models;
@@ -10,30 +9,34 @@ using ClanBattleGame.Services;
 
 var configPath = "config.json";
 var clanPath = "clan.json";
-var battleLogPath = "battle_log.json";
 var commandLogPath = "command_log.json";
+var commandHistoryPath = "command_history.json";
 
 IConfigRepository configRepository = new JsonConfigRepository();
 IClanRepository clanRepository = new JsonClanRepository();
-IBattleLogRepository battleLogRepository = new JsonBattleLogRepository();
 ICommandLogRepository commandLogRepository = new JsonCommandLogRepository();
+IGameCommandHistoryRepository commandHistoryRepository = new JsonGameCommandHistoryRepository();
 
 var config = configRepository.LoadOrCreate(configPath);
 
 IDamageCalculator damageCalculator = new SimpleDamageCalculator();
-var (randomProvider, clanGenerator, battleSimulator, playerViewFactory) = BuildServices(config, damageCalculator);
+var (randomProvider, clanGenerator, _, playerViewFactory) = BuildServices(config, damageCalculator);
 
 ClanReport textReport = new ClanTextReport(new ConsoleTextDevice());
 ClanReport asciiReport = new ClanAsciiReport(new ConsoleAsciiDevice());
 
 Clan? clan = null;
-BattleLog? lastBattleLog = null;
 CommandLog commandLog = new() { StartedAt = DateTime.UtcNow };
+GameCommandHistory commandHistory = new();
 
 IClanMediator mediator = new ClanMediator(commandLog);
 IPlayerActionExecutor actionExecutor = new PlayerActionExecutor();
 ICommandHandler commandChain = BuildCommandChain();
 var commander = new ClanCommander(mediator, commandChain);
+
+var invoker = new CommandInvoker();
+Clan? gameClanA = null;
+Clan? gameClanB = null;
 
 while (true)
 {
@@ -49,10 +52,11 @@ while (true)
     Console.WriteLine("9) Показати останній лог команд");
     Console.WriteLine("10) Зберегти лог у JSON (command_log.json)");
     Console.WriteLine("11) Завантажити лог з JSON (command_log.json)");
-    Console.WriteLine("12) Симуляція бою двох кланів (створити 2 клани і провести бій)");
-    Console.WriteLine("13) Показати останній журнал бою (з JSON)");
-    Console.WriteLine("14) Зберегти журнал бою у JSON (battle_log.json)");
-    Console.WriteLine("15) Завантажити журнал бою з JSON (battle_log.json)");
+    Console.WriteLine("12) Грати: почергові команди двох кланів (N ходів)");
+    Console.WriteLine("13) Undo останньої команди");
+    Console.WriteLine("14) Показати історію команд (останні 20)");
+    Console.WriteLine("15) Зберегти історію команд у JSON");
+    Console.WriteLine("16) Завантажити історію команд з JSON");
     Console.WriteLine("0) Вихід");
     Console.Write("Обери пункт: ");
 
@@ -122,12 +126,13 @@ while (true)
         case "7":
             EditConfig(config, configRepository, configPath);
             config = configRepository.LoadOrCreate(configPath);
-            (randomProvider, clanGenerator, battleSimulator, playerViewFactory) = BuildServices(config, damageCalculator);
+            (randomProvider, clanGenerator, _, playerViewFactory) = BuildServices(config, damageCalculator);
             if (clan is not null)
             {
                 mediator = BuildMediator(clan, config, actionExecutor, commandLog);
                 commander = new ClanCommander(mediator, commandChain);
             }
+
             Console.WriteLine("Налаштування оновлено.");
             break;
         case "8":
@@ -171,11 +176,6 @@ while (true)
             }
 
             PrintCommandSeriesSummary(clan!, commandLog);
-            Console.Write("Показати лог зараз? (y/n): ");
-            if (string.Equals(Console.ReadLine(), "y", StringComparison.OrdinalIgnoreCase))
-            {
-                ShowCommandLog(commandLog);
-            }
             break;
         case "9":
             ShowCommandLog(commandLog);
@@ -190,60 +190,39 @@ while (true)
             ShowCommandLog(commandLog);
             break;
         case "12":
-            Console.Write("Назва клану A (Enter для стандартної): ");
-            var clanAName = Console.ReadLine();
-            if (string.IsNullOrWhiteSpace(clanAName))
-            {
-                clanAName = "Клан A";
-            }
-
-            Console.Write("Назва клану B (Enter для стандартної): ");
-            var clanBName = Console.ReadLine();
-            if (string.IsNullOrWhiteSpace(clanBName))
-            {
-                clanBName = "Клан B";
-            }
-
-            var clanA = clanGenerator.CreateClan(clanAName, config);
-            var clanB = clanGenerator.CreateClan(clanBName, config);
-            lastBattleLog = battleSimulator.Simulate(clanA, clanB, config);
-            ShowBattleSummary(lastBattleLog);
+            PlayTurns();
             break;
         case "13":
-            var loadedLog = battleLogRepository.Load(battleLogPath);
-            if (loadedLog is null)
+            if (!invoker.UndoLast())
             {
-                Console.WriteLine("Журнал бою не знайдено.");
+                Console.WriteLine("Немає команди для скасування.");
             }
             else
             {
-                lastBattleLog = loadedLog;
-                ShowBattleLogShort(lastBattleLog);
+                if (commandHistory.Entries.Count > 0)
+                {
+                    commandHistory.Entries.RemoveAt(commandHistory.Entries.Count - 1);
+                }
+
+                Console.WriteLine("Останню команду скасовано.");
+                if (gameClanA is not null && gameClanB is not null)
+                {
+                    ShowTwoClansMap(gameClanA, gameClanB, config);
+                }
             }
+
             break;
         case "14":
-            if (lastBattleLog is null)
-            {
-                Console.WriteLine("Немає журналу бою для збереження.");
-            }
-            else
-            {
-                battleLogRepository.Save(battleLogPath, lastBattleLog);
-                Console.WriteLine("Журнал бою збережено.");
-            }
+            ShowLastHistory(commandHistory);
             break;
         case "15":
-            var loadedBattleLog = battleLogRepository.Load(battleLogPath);
-            if (loadedBattleLog is null)
-            {
-                Console.WriteLine("Не вдалося завантажити журнал бою.");
-            }
-            else
-            {
-                lastBattleLog = loadedBattleLog;
-                Console.WriteLine("Журнал бою завантажено.");
-                ShowBattleLogShort(lastBattleLog);
-            }
+            commandHistoryRepository.Save(commandHistoryPath, commandHistory);
+            Console.WriteLine("Історію команд збережено.");
+            break;
+        case "16":
+            commandHistory = commandHistoryRepository.Load(commandHistoryPath);
+            Console.WriteLine("Історію команд завантажено.");
+            ShowLastHistory(commandHistory);
             break;
         case "0":
             return;
@@ -251,6 +230,188 @@ while (true)
             Console.WriteLine("Невідомий пункт меню.");
             break;
     }
+}
+
+void PlayTurns()
+{
+    if (gameClanA is null || gameClanB is null)
+    {
+        gameClanA = clanGenerator.CreateClan("Клан A", config);
+        gameClanB = clanGenerator.CreateClan("Клан B", config);
+        PositionClan(gameClanA, config.FieldWidth / 2 - 2, config.FieldHeight / 2, config, randomProvider);
+        PositionClan(gameClanB, config.FieldWidth / 2 + 2, config.FieldHeight / 2, config, randomProvider);
+        Console.WriteLine("Створено два клани для почергової гри.");
+    }
+
+    var defaultTurns = config.MaxTurns;
+    Console.Write($"Введи кількість ходів N (Enter = {defaultTurns}): ");
+    var turnsInput = Console.ReadLine();
+    var turns = defaultTurns;
+    if (!string.IsNullOrWhiteSpace(turnsInput) && (!int.TryParse(turnsInput, out turns) || turns <= 0))
+    {
+        Console.WriteLine("Некоректне N.");
+        return;
+    }
+
+    for (var turn = 1; turn <= turns; turn++)
+    {
+        Console.WriteLine($"Хід {turn}/{turns}");
+        ExecuteClanTurn(gameClanA, "A");
+        ShowTwoClansMap(gameClanA, gameClanB, config);
+        ExecuteClanTurn(gameClanB, "B");
+        ShowTwoClansMap(gameClanA, gameClanB, config);
+    }
+}
+
+void ExecuteClanTurn(Clan clanToPlay, string label)
+{
+    Console.WriteLine($"Клан {label}: {clanToPlay.Name}");
+    Console.WriteLine("Оберіть загін (номер) або R для випадкового:");
+    foreach (var squad in clanToPlay.Squads)
+    {
+        Console.WriteLine($"  {squad.SquadId}) Загін {squad.SquadType}, позиція=({squad.Position.X},{squad.Position.Y})");
+    }
+
+    Console.Write("Вибір: ");
+    var squadInput = Console.ReadLine();
+    Squad squadToCommand;
+    if (string.Equals(squadInput, "R", StringComparison.OrdinalIgnoreCase))
+    {
+        squadToCommand = clanToPlay.Squads[randomProvider.NextInt(0, clanToPlay.Squads.Count)];
+    }
+    else if (!int.TryParse(squadInput, out var squadId))
+    {
+        Console.WriteLine("Некоректний загін.");
+        return;
+    }
+    else
+    {
+        squadToCommand = clanToPlay.Squads.FirstOrDefault(squad => squad.SquadId == squadId) ?? clanToPlay.Squads[0];
+    }
+
+    Console.WriteLine("Команда: 1-Вперед, 2-Назад, 3-Битися, R-випадково");
+    Console.Write("Вибір: ");
+    var cmdInput = Console.ReadLine();
+    var commandType = cmdInput switch
+    {
+        "1" => SquadCommandType.Forward,
+        "2" => SquadCommandType.Backward,
+        "3" => SquadCommandType.Fight,
+        _ => (SquadCommandType)randomProvider.NextInt(0, 3)
+    };
+
+    var receiver = new SquadCommandReceiver(clanToPlay, squadToCommand, config, randomProvider);
+    IGameCommand command = commandType switch
+    {
+        SquadCommandType.Forward => new ForwardCommand(clanToPlay.Name, squadToCommand.SquadId, receiver),
+        SquadCommandType.Backward => new BackwardCommand(clanToPlay.Name, squadToCommand.SquadId, receiver),
+        _ => new FightCommand(clanToPlay.Name, squadToCommand.SquadId, receiver)
+    };
+
+    invoker.Enqueue(command);
+    invoker.ExecuteNext();
+
+    if (command is GameCommandBase gameCommand)
+    {
+        commandHistory.Entries.Add(new GameCommandHistoryEntry
+        {
+            Timestamp = gameCommand.CreatedAt,
+            ClanName = gameCommand.ClanName,
+            SquadId = gameCommand.SquadId,
+            CommandType = gameCommand.Name,
+            PlayersAffected = gameCommand.LastResult.PlayersAffected,
+            Summary = gameCommand.LastResult.BuildSummary()
+        });
+    }
+}
+
+static void PositionClan(Clan clanToPosition, int centerX, int centerY, AppConfig config, IRandomProvider randomProvider)
+{
+    var offsets = new[]
+    {
+        new Position(0, 0),
+        new Position(1, 0),
+        new Position(-1, 0),
+        new Position(0, 1),
+        new Position(0, -1),
+        new Position(1, 1),
+        new Position(-1, -1),
+        new Position(1, -1),
+        new Position(-1, 1)
+    };
+
+    for (var i = 0; i < clanToPosition.Squads.Count; i++)
+    {
+        var offset = offsets[i % offsets.Length];
+        var x = Math.Clamp(centerX + offset.X, 0, config.FieldWidth - 1);
+        var y = Math.Clamp(centerY + offset.Y, 0, config.FieldHeight - 1);
+        var squadPosition = new Position(x, y);
+        clanToPosition.Squads[i].Position = squadPosition;
+
+        for (var p = 0; p < clanToPosition.Squads[i].Players.Count; p++)
+        {
+            var px = Math.Clamp(x + randomProvider.NextInt(-1, 2), 0, config.FieldWidth - 1);
+            var py = Math.Clamp(y + randomProvider.NextInt(-1, 2), 0, config.FieldHeight - 1);
+            clanToPosition.Squads[i].Players[p].Position = new Position(px, py);
+            clanToPosition.Squads[i].Players[p].StateType = PlayerStateType.Healthy;
+        }
+    }
+}
+
+static void ShowTwoClansMap(Clan clanA, Clan clanB, AppConfig config)
+{
+    var grid = new char[config.FieldHeight, config.FieldWidth];
+    for (var y = 0; y < config.FieldHeight; y++)
+    {
+        for (var x = 0; x < config.FieldWidth; x++)
+        {
+            grid[y, x] = '.';
+        }
+    }
+
+    PlaceClan(clanA, grid, config, true);
+    PlaceClan(clanB, grid, config, false);
+
+    var device = new ConsoleAsciiDevice();
+    device.DrawMap(grid, "Легенда: A=w/e/g, B=W/E/G, x/X=поранений, .=порожньо, *=накладення");
+}
+
+static void PlaceClan(Clan clanToDraw, char[,] grid, AppConfig config, bool isClanA)
+{
+    foreach (var squad in clanToDraw.Squads)
+    {
+        foreach (var player in squad.Players)
+        {
+            if (player.StateType == PlayerStateType.OutOfBattle)
+            {
+                continue;
+            }
+
+            var x = Math.Clamp(player.Position.X, 0, config.FieldWidth - 1);
+            var y = Math.Clamp(player.Position.Y, 0, config.FieldHeight - 1);
+            var symbol = GetPlayerSymbol(player, isClanA);
+            grid[y, x] = grid[y, x] == '.' ? symbol : '*';
+        }
+    }
+}
+
+static char GetPlayerSymbol(Player player, bool isClanA)
+{
+    if (player.StateType == PlayerStateType.Wounded)
+    {
+        return isClanA ? 'x' : 'X';
+    }
+
+    return (player.RaceType, isClanA) switch
+    {
+        (RaceType.Warrior, true) => 'w',
+        (RaceType.Elf, true) => 'e',
+        (RaceType.Dwarf, true) => 'g',
+        (RaceType.Warrior, false) => 'W',
+        (RaceType.Elf, false) => 'E',
+        (RaceType.Dwarf, false) => 'G',
+        _ => '?'
+    };
 }
 
 static IClanMediator BuildMediator(Clan clan, AppConfig config, IPlayerActionExecutor actionExecutor, CommandLog commandLog)
@@ -351,6 +512,20 @@ static void ShowCommandLog(CommandLog log)
     }
 }
 
+static void ShowLastHistory(GameCommandHistory history)
+{
+    if (history.Entries.Count == 0)
+    {
+        Console.WriteLine("Історія команд порожня.");
+        return;
+    }
+
+    foreach (var entry in history.Entries.TakeLast(20))
+    {
+        Console.WriteLine($"[{entry.Timestamp:HH:mm:ss}] {entry.ClanName}, загін #{entry.SquadId}, {entry.CommandType}, гравців: {entry.PlayersAffected}, {entry.Summary}");
+    }
+}
+
 static void EditConfig(AppConfig config, IConfigRepository repository, string path)
 {
     PrintConfig(config);
@@ -364,6 +539,8 @@ static void EditConfig(AppConfig config, IConfigRepository repository, string pa
     config.MinHeightCm = ReadInt("Мінімальний зріст (см)", config.MinHeightCm);
     config.MaxHeightCm = ReadInt("Максимальний зріст (см)", config.MaxHeightCm);
     config.FeatureChancePercent = ReadInt("Ймовірність ознаки (%)", config.FeatureChancePercent);
+    config.HitChancePercent = ReadInt("Ймовірність влучання (%)", config.HitChancePercent);
+    config.MaxTurns = ReadInt("Типова кількість ходів", config.MaxTurns);
 
     Console.Write($"Кольори через кому (поточні: {string.Join(", ", config.AvailableColors)}), Enter щоб лишити: ");
     var colorsInput = Console.ReadLine();
@@ -410,6 +587,8 @@ static void PrintConfig(AppConfig config)
     Console.WriteLine($"  Максимум раундів бою: {config.MaxRounds}");
     Console.WriteLine($"  Зріст: {config.MinHeightCm}-{config.MaxHeightCm} см");
     Console.WriteLine($"  Шанс ознаки: {config.FeatureChancePercent}%");
+    Console.WriteLine($"  Шанс влучання: {config.HitChancePercent}%");
+    Console.WriteLine($"  Типові ходи: {config.MaxTurns}");
     Console.WriteLine($"  Кольори: {string.Join(", ", config.AvailableColors)}");
     Console.WriteLine($"  Типи одягу: {string.Join(", ", config.AvailableClothingTypes)}");
     Console.WriteLine($"  Seed: {(config.RandomSeed.HasValue ? config.RandomSeed.Value : "випадковий")}");
@@ -425,79 +604,4 @@ static int ReadInt(string label, int current)
     }
 
     return current;
-}
-
-static void ShowBattleSummary(BattleLog log)
-{
-    Console.WriteLine("Підсумок бою:");
-    Console.WriteLine($"  Клан A: {log.ClanAName}, живих: {log.AliveCountA}");
-    Console.WriteLine($"  Клан B: {log.ClanBName}, живих: {log.AliveCountB}");
-    if (log.Result == "Нічия")
-    {
-        Console.WriteLine("  Результат: Нічия");
-    }
-    else
-    {
-        Console.WriteLine($"  Переможець: {log.Result}");
-    }
-
-    var topPlayers = GetTopDamagePlayers(log, 3);
-    if (topPlayers.Count == 0)
-    {
-        Console.WriteLine("  Немає даних про урон.");
-        return;
-    }
-
-    Console.WriteLine("  Топ-3 гравці за уроном:");
-    for (var i = 0; i < topPlayers.Count; i++)
-    {
-        var player = topPlayers[i];
-        Console.WriteLine($"    {i + 1}) {player.Name} ({player.Clan}) - {player.Damage}");
-    }
-}
-
-static void ShowBattleLogShort(BattleLog log)
-{
-    Console.WriteLine("Журнал бою:");
-    Console.WriteLine($"  Початок: {log.StartedAt:g}");
-    Console.WriteLine($"  Завершення: {log.FinishedAt:g}");
-    Console.WriteLine($"  Клани: {log.ClanAName} vs {log.ClanBName}");
-    Console.WriteLine($"  Результат: {log.Result}");
-    Console.WriteLine($"  Раундів: {log.Rounds.Count}");
-
-    var lastRounds = log.Rounds.TakeLast(5).ToList();
-    if (lastRounds.Count == 0)
-    {
-        Console.WriteLine("  Раундів не було.");
-        return;
-    }
-
-    Console.WriteLine("  Останні раунди:");
-    foreach (var round in lastRounds)
-    {
-        var killedText = round.WasKilled ? " (вбитий)" : string.Empty;
-        Console.WriteLine($"    [{round.RoundNumber}] {round.AttackerName} -> {round.TargetName} | урон {round.Damage}, HP {round.TargetHealthAfter}{killedText}");
-    }
-}
-
-static List<(string Name, string Clan, int Damage)> GetTopDamagePlayers(BattleLog log, int count)
-{
-    var totals = new Dictionary<Guid, (string Name, string Clan, int Damage)>();
-
-    foreach (var round in log.Rounds)
-    {
-        if (!totals.TryGetValue(round.AttackerId, out var current))
-        {
-            totals[round.AttackerId] = (round.AttackerName, round.AttackerClan, round.Damage);
-        }
-        else
-        {
-            totals[round.AttackerId] = (current.Name, current.Clan, current.Damage + round.Damage);
-        }
-    }
-
-    return totals.Values
-        .OrderByDescending(item => item.Damage)
-        .Take(count)
-        .ToList();
 }

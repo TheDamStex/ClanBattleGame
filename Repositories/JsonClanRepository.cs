@@ -113,6 +113,8 @@ public sealed class PlayerDto
     public Stats Stats { get; set; } = new();
     public Position Position { get; set; }
     public Dictionary<string, string> Features { get; set; } = new();
+    public int ActionsPerformed { get; set; }
+    public PlayerStateType StateType { get; set; } = PlayerStateType.Healthy;
 
     public static PlayerDto FromDomain(Player player)
     {
@@ -125,7 +127,9 @@ public sealed class PlayerDto
             MovementType = player.MovementType,
             Stats = player.Stats,
             Position = player.Position,
-            Features = new Dictionary<string, string>(player.Features)
+            Features = new Dictionary<string, string>(player.Features),
+            ActionsPerformed = player.ActionsPerformed,
+            StateType = player.StateType
         };
     }
 
@@ -140,7 +144,9 @@ public sealed class PlayerDto
             MovementType = MovementType,
             Stats = Stats,
             Position = Position,
-            Features = new Dictionary<string, string>(Features)
+            Features = new Dictionary<string, string>(Features),
+            ActionsPerformed = ActionsPerformed,
+            StateType = StateType
         };
     }
 }
